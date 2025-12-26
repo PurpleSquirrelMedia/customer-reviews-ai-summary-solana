@@ -3,24 +3,40 @@ import OpenAI from "openai";
 import { OpenAIStream, StreamingTextResponse } from "ai";
 import { Product } from "./types";
 
-if (!process.env.PERPLEXITY_API_KEY) {
+// Support multiple AI providers - Perplexity, Together AI, or OpenAI
+const apiKey = process.env.PERPLEXITY_API_KEY || process.env.TOGETHER_API_KEY || process.env.OPENAI_API_KEY;
+const baseURL = process.env.PERPLEXITY_API_KEY 
+  ? "https://api.perplexity.ai"
+  : process.env.TOGETHER_API_KEY 
+    ? "https://api.together.xyz/v1"
+    : undefined;
+
+if (!apiKey) {
   throw new Error(
-    "PERPLEXITY_API_KEY environment variable is required. You can get this via https://vercel.com/docs/integrations/ai"
+    "API key required. Set PERPLEXITY_API_KEY, TOGETHER_API_KEY, or OPENAI_API_KEY"
   );
 }
-const perplexity = new OpenAI({
-  apiKey: process.env.PERPLEXITY_API_KEY || "",
-  baseURL: "https://api.perplexity.ai",
+
+const client = new OpenAI({
+  apiKey: apiKey,
+  baseURL: baseURL,
 });
+
+// Use appropriate model based on provider
+const model = process.env.PERPLEXITY_API_KEY 
+  ? "pplx-7b-chat"
+  : process.env.TOGETHER_API_KEY
+    ? "mistralai/Mistral-7B-Instruct-v0.2"
+    : "gpt-3.5-turbo";
 
 export async function summarizeReviews(product: Product) {
   const averageRating =
     product.reviews.reduce((acc, review) => acc + review.stars, 0) /
     product.reviews.length;
 
-  const prompt = `Write a summary of the reviews for the ${
+  const prompt = \`Write a summary of the reviews for the \${
     product.name
-  } product. The product's average rating is ${averageRating} out of 5 stars. 
+  } product. The product's average rating is \${averageRating} out of 5 stars. 
 Your goal is to highlight the most common themes and sentiments expressed by customers.
 If multiple themes are present, try to capture the most important ones.
 If no patterns emerge but there is a shared sentiment, capture that instead.
@@ -43,12 +59,12 @@ Hit the following tone based on rating:
 - 4-5 stars: positive
 
 The customer reviews to summarize are as follows:
-${product.reviews
-  .map((review, i) => `Review ${i + 1}:\n${review.review}`)
-  .join("\n\n")}`;
+\${product.reviews
+  .map((review, i) => \`Review \${i + 1}:\n\${review.review}\`)
+  .join("\\n\\n")}\`;
 
   const query = {
-    model: "pplx-7b-chat",
+    model: model,
     stream: true,
     messages: buildPrompt(prompt),
     max_tokens: 1000,
@@ -58,7 +74,7 @@ ${product.reviews
   } as const;
 
   return unstable_cache(async () => {
-    const response = await perplexity.chat.completions.create(query);
+    const response = await client.chat.completions.create(query);
 
     // Convert the response into a friendly text-stream
     const stream = OpenAIStream(response);
@@ -71,7 +87,7 @@ ${product.reviews
       .trim()
       .replace(/^"/, "")
       .replace(/"$/, "")
-      .replace(/[\[\(]\d+ words[\]\)]/g, "");
+      .replace(/[\\[\\(]\\d+ words[\\]\\)]/g, "");
     return text;
   }, [
     JSON.stringify(query),
