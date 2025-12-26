@@ -5,9 +5,9 @@ import { Product } from "./types";
 
 // Support multiple AI providers - Perplexity, Together AI, or OpenAI
 const apiKey = process.env.PERPLEXITY_API_KEY || process.env.TOGETHER_API_KEY || process.env.OPENAI_API_KEY;
-const baseURL = process.env.PERPLEXITY_API_KEY 
+const baseURL = process.env.PERPLEXITY_API_KEY
   ? "https://api.perplexity.ai"
-  : process.env.TOGETHER_API_KEY 
+  : process.env.TOGETHER_API_KEY
     ? "https://api.together.xyz/v1"
     : undefined;
 
@@ -23,7 +23,7 @@ const client = new OpenAI({
 });
 
 // Use appropriate model based on provider
-const model = process.env.PERPLEXITY_API_KEY 
+const model = process.env.PERPLEXITY_API_KEY
   ? "pplx-7b-chat"
   : process.env.TOGETHER_API_KEY
     ? "mistralai/Mistral-7B-Instruct-v0.2"
@@ -34,9 +34,9 @@ export async function summarizeReviews(product: Product) {
     product.reviews.reduce((acc, review) => acc + review.stars, 0) /
     product.reviews.length;
 
-  const prompt = \`Write a summary of the reviews for the \${
+  const prompt = `Write a summary of the reviews for the ${
     product.name
-  } product. The product's average rating is \${averageRating} out of 5 stars. 
+  } product. The product's average rating is ${averageRating} out of 5 stars.
 Your goal is to highlight the most common themes and sentiments expressed by customers.
 If multiple themes are present, try to capture the most important ones.
 If no patterns emerge but there is a shared sentiment, capture that instead.
@@ -59,9 +59,9 @@ Hit the following tone based on rating:
 - 4-5 stars: positive
 
 The customer reviews to summarize are as follows:
-\${product.reviews
-  .map((review, i) => \`Review \${i + 1}:\n\${review.review}\`)
-  .join("\\n\\n")}\`;
+${product.reviews
+  .map((review, i) => `Review ${i + 1}:\n${review.review}`)
+  .join("\n\n")}`;
 
   const query = {
     model: model,
@@ -87,7 +87,7 @@ The customer reviews to summarize are as follows:
       .trim()
       .replace(/^"/, "")
       .replace(/"$/, "")
-      .replace(/[\\[\\(]\\d+ words[\\]\\)]/g, "");
+      .replace(/[\[\(]\d+ words[\]\)]/g, "");
     return text;
   }, [
     JSON.stringify(query),
