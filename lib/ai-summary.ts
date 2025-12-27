@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
-import OpenAI from "openai";
-import { OpenAIStream, StreamingTextResponse } from "ai";
+import { generateText } from "ai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { Product } from "./types";
 
 // Support multiple AI providers - Perplexity, Together AI, or OpenAI
@@ -17,17 +17,18 @@ if (!apiKey) {
   );
 }
 
-const client = new OpenAI({
+// Create OpenAI-compatible provider (works with Perplexity, Together, OpenAI)
+const openai = createOpenAI({
   apiKey: apiKey,
   baseURL: baseURL,
 });
 
 // Use appropriate model based on provider
-const model = process.env.PERPLEXITY_API_KEY
+const modelId = process.env.PERPLEXITY_API_KEY
   ? "pplx-7b-chat"
   : process.env.TOGETHER_API_KEY
     ? "mistralai/Mistral-7B-Instruct-v0.2"
-    : "gpt-3.5-turbo";
+    : "gpt-4o-mini";
 
 export async function summarizeReviews(product: Product) {
   const averageRating =
@@ -63,45 +64,27 @@ ${product.reviews
   .map((review, i) => `Review ${i + 1}:\n${review.review}`)
   .join("\n\n")}`;
 
-  const query = {
-    model: model,
-    stream: true,
-    messages: buildPrompt(prompt),
-    max_tokens: 1000,
-    temperature: 0.75,
-    top_p: 1,
-    frequency_penalty: 1,
-  } as const;
+  const cacheKey = [
+    modelId,
+    prompt.substring(0, 100),
+    "2.0",
+    process.env.VERCEL_BRANCH_URL || "",
+    process.env.NODE_ENV || "",
+  ];
 
   return unstable_cache(async () => {
-    const response = await client.chat.completions.create(query);
+    const { text } = await generateText({
+      model: openai(modelId),
+      prompt: prompt,
+      maxTokens: 1000,
+      temperature: 0.75,
+    });
 
-    // Convert the response into a friendly text-stream
-    const stream = OpenAIStream(response);
-
-    // Respond with the stream
-    const streamingResponse = new StreamingTextResponse(stream);
-    let text = await streamingResponse.text();
-    // Remove the quotes from the response tht the LLM sometimes adds.
-    text = text
+    // Remove the quotes from the response that the LLM sometimes adds.
+    return text
       .trim()
       .replace(/^"/, "")
       .replace(/"$/, "")
       .replace(/[\[\(]\d+ words[\]\)]/g, "");
-    return text;
-  }, [
-    JSON.stringify(query),
-    "1.0",
-    process.env.VERCEL_BRANCH_URL || "",
-    process.env.NODE_ENV || "",
-  ])();
-}
-
-function buildPrompt(prompt: string): [{ role: "user"; content: string }] {
-  return [
-    {
-      role: "user",
-      content: prompt,
-    },
-  ];
+  }, cacheKey)();
 }
